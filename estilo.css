@@ -274,10 +274,10 @@ code { font: 12.5px var(--mono); background: var(--sistema-f); border-radius: 4p
 .trilho { position: relative; margin-top: 44px; min-height: 420px; }
 svg.ramo { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
 svg.ramo path { fill: none; stroke: rgba(var(--t-rgb), .22); stroke-width: 1; stroke-linecap: round; }
-.linha-etapas { position: relative; display: grid; grid-template-columns: repeat(5, 1fr); list-style: none; margin: 0; padding: 0; transition: opacity .35s ease, transform .45s cubic-bezier(.22, .8, .24, 1); }
+.linha-etapas { position: relative; display: grid; grid-template-columns: repeat(var(--n, 5), 1fr); list-style: none; margin: 0; padding: 0; transition: opacity .35s ease, transform .45s cubic-bezier(.22, .8, .24, 1); }
 /* O traço une a primeira à última bolinha (os centros ficam a 10% e a 90%); o trecho percorrido vai mais escuro. */
-.linha-etapas::before, .linha-etapas::after { content: ""; position: absolute; top: 11px; height: 1px; left: 10%; }
-.linha-etapas::before { right: 10%; background: rgba(var(--t-rgb), .16); }
+.linha-etapas::before, .linha-etapas::after { content: ""; position: absolute; top: 11px; height: 1px; left: calc(50% / var(--n, 5)); }
+.linha-etapas::before { right: calc(50% / var(--n, 5)); background: rgba(var(--t-rgb), .16); }
 .linha-etapas::after { width: var(--ate, 0%); background: rgba(var(--t-rgb), .42); }
 .linha-etapas li { display: flex; justify-content: center; position: relative; z-index: 1; }
 .etapa { position: relative; display: flex; flex-direction: column; align-items: center; gap: 16px; background: none; border: 0; padding: 0; cursor: pointer; color: inherit; font: inherit; }
@@ -364,3 +364,6 @@ svg.ramo path { fill: none; stroke: rgba(var(--t-rgb), .22); stroke-width: 1; st
   #corpo.no-trilho #detalhe.painel-trilho { position: static; width: auto; max-height: none; border-radius: 20px; margin: 0 16px 80px; }
   .etapa .rot { font-size: 10px; letter-spacing: .02em; }
 }
+
+/* D77: estágio sem subetapa do papel diz que o trabalho ali é de outros papéis. */
+.estacoes .passa { margin: 18px 0 0; font-size: 13.5px; color: var(--suave); }

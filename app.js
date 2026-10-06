@@ -34,7 +34,9 @@
     const r = { p: q.get('p'), papel: q.get('papel'), tela: q.get('tela') || 'trilho', item: q.get('item'), vista: q.get('vista'), est: q.get('est'), etapa: q.get('etapa') };
     /* No trilho, o endereço fica coerente: a subetapa em foco manda no estágio; o seu dia e o que é de fora não têm estágio; o resto sai. */
     if (r.tela === 'trilho' && r.est) {
-      const x = ESTACOES.find((s) => s.id === r.est);
+      const ps = S.pessoas[r.p];
+      const pap = ps ? ((ps.papeis || []).includes(r.papel) ? r.papel : (ps.papeis || [])[0]) : r.papel;
+      const x = papelDe(pap) ? modelo(pap).sub(r.est) : ESTACOES.find((s) => s.id === r.est);
       if (x) r.etapa = x.e;
       else if (['dia', 'plataforma'].includes(r.est)) r.etapa = null;
       else r.est = null;
@@ -576,11 +578,12 @@
     aviso(msg);
     const r = lerRota();
     /* No painel do trilho: se ainda há decisão sua na mesma etapa, o painel continua aberto. */
-    const resta = r.est && abertas(r.p, r.papel, 'com').some((x) => (r.est === 'plataforma' ? !estDe(x) : estDe(x) === r.est));
+    const M = modelo(r.papel);
+    const resta = r.est && abertas(r.p, r.papel, 'com').some((x) => { const k = estNo(r.papel, x); return r.est === 'plataforma' ? !(k && M.sub(k)) : k === r.est; });
     /* Sem outra decisão ali, o painel fecha e a linha volta com o estágio aberto (D74), com o foco de teclado nele. */
-    const etDec = r.etapa || (ESTACOES.find((s) => s.id === r.est) || {}).e;
+    const etDec = r.etapa || (M.sub(r.est) || {}).e;
     if (!resta && r.tela === 'trilho' && etDec) focoDepois = `.etapa[data-etapa="${etDec}"]`;
-    ir({ p: r.p, papel: r.papel, tela: r.tela, etapa: r.etapa || (ESTACOES.find((s) => s.id === r.est) || {}).e, est: resta ? r.est : undefined });
+    ir({ p: r.p, papel: r.papel, tela: r.tela, etapa: etDec, est: resta ? r.est : undefined });
   }
 
   /* ---------- pedaços de tela ---------- */
@@ -1096,23 +1099,77 @@
   /* As subetapas do trilho. `papeis` é a lente: quem tem trabalho ali. `cli` é o nome que o cliente lê; sem ele, a subetapa é
      interna e aparece para o cliente só como ponto, sem nome. `ic` é o ícone de traço fino. */
   const ESTACOES = [
-    { id: 'pedido', e: 'intencao', ic: 'pedido', t: 'Pedido recebido', cli: 'Recebido', papeis: ['cliente', 'aipo', 'pm'] },
+    { id: 'pedido', e: 'intencao', ic: 'pedido', t: 'Pedido recebido', cli: 'Recebido', papeis: ['aipo', 'pm'] },
     { id: 'conversas', e: 'intencao', ic: 'conversa', t: 'Em discussão', papeis: ['aipo'] },
-    { id: 'resultado', e: 'intencao', ic: 'alvo', t: 'Resultado esperado', papeis: ['aipo', 'pm'] },
-    { id: 'requisito', e: 'definicao', ic: 'requisito', t: 'Requisito', cli: 'Em análise pela equipe', papeis: ['aipo', 'pm', 'cliente'] },
+    { id: 'resultado', e: 'intencao', ic: 'alvo', t: 'Resultado esperado', papeis: ['aipo'] },
+    { id: 'requisito', e: 'definicao', ic: 'requisito', t: 'Requisito', cli: 'Em análise pela equipe', papeis: ['aipo', 'pm'] },
     { id: 'spec', e: 'definicao', ic: 'spec', t: 'Spec', papeis: ['aipo', 'builder', 'pe'] },
-    { id: 'decisao', e: 'definicao', ic: 'decisao', t: 'Decisão técnica', papeis: ['pm', 'pe', 'headops'] },
+    { id: 'decisao', e: 'definicao', ic: 'decisao', t: 'Decisão técnica', papeis: ['pm', 'pe'] },
     { id: 'backlog', e: 'trabalho', ic: 'planejado', t: 'Planejado', papeis: ['pm', 'aipo'] },
-    { id: 'sprint', e: 'trabalho', ic: 'sprint', t: 'Sprint', papeis: ['pm', 'aipo', 'headops'] },
-    { id: 'tasks', e: 'trabalho', ic: 'construcao', t: 'Em construção', cli: 'Em construção', papeis: ['pm', 'builder', 'cliente'] },
+    { id: 'sprint', e: 'trabalho', ic: 'sprint', t: 'Sprint', papeis: ['pm'] },
+    { id: 'tasks', e: 'trabalho', ic: 'construcao', t: 'Em construção', cli: 'Em construção', papeis: ['builder'] },
     { id: 'codigo', e: 'trabalho', ic: 'pr', t: 'PR e revisão', papeis: ['builder', 'pe'] },
-    { id: 'previa', e: 'entrega', ic: 'previa', t: 'Para conferir', cli: 'Prévia', papeis: ['aipo', 'cliente'] },
-    { id: 'homolog', e: 'entrega', ic: 'homologado', t: 'Homologado', cli: 'Homologado', papeis: ['cliente', 'pm', 'aipo'] },
-    { id: 'implant', e: 'entrega', ic: 'producao', t: 'Ida à produção', cli: 'Ida à produção', papeis: ['pm', 'builder', 'cliente'] },
-    { id: 'liberado', e: 'operacao', ic: 'liberado', t: 'Liberado ao uso', cli: 'Liberado ao uso', papeis: ['pm', 'builder', 'cliente'] },
-    { id: 'medicao', e: 'operacao', ic: 'medido', t: 'Medido', cli: 'Medido', papeis: ['pm', 'cliente', 'direcao', 'headops', 'aipo'] },
-    { id: 'uso', e: 'operacao', ic: 'uso', t: 'Resultado no uso', papeis: ['pm', 'aipo', 'direcao'] }
+    { id: 'previa', e: 'entrega', ic: 'previa', t: 'Para conferir', cli: 'Prévia', papeis: ['aipo', 'builder'] },
+    { id: 'homolog', e: 'entrega', ic: 'homologado', t: 'Homologado', cli: 'Homologado', papeis: ['aipo', 'pm'] },
+    { id: 'implant', e: 'entrega', ic: 'producao', t: 'Ida à produção', cli: 'Ida à produção', papeis: ['pm', 'builder'] },
+    { id: 'liberado', e: 'operacao', ic: 'liberado', t: 'Liberado ao uso', cli: 'Liberado ao uso', papeis: ['pm', 'builder'] },
+    { id: 'medicao', e: 'operacao', ic: 'medido', t: 'Medido', cli: 'Medido', papeis: ['pm', 'aipo'] },
+    { id: 'uso', e: 'operacao', ic: 'uso', t: 'Resultado no uso', papeis: ['pm', 'aipo'] }
   ];
+  /* Trilho por papel em quatro altitudes (D77, provisória): a espinha acima é a do projeto, recortada para a AI PO, o PM, o
+     Builder e o Principal Engineer, que veem só as subetapas em que agem. O cliente lê cinco fases mapeadas das mesmas subetapas;
+     o Head Ops e a Direção, o laço da carteira, com os projetos como subetapas; o Admin, o laço da plataforma. Toda subetapa de
+     todo trilho lê o mesmo estado: muda a altitude, não o dado. */
+  const ALTITUDE = { cliente: 'cliente', headops: 'carteira', direcao: 'carteira', admin: 'plataforma' };
+  const FASES_CLI = [['recebido', 'Recebido', ['pedido']], ['analise', 'Em análise', ['requisito']], ['construcao', 'Em construção', ['tasks']],
+    ['comvoce', 'Com você', ['previa', 'homolog', 'implant']], ['entregue', 'Entregue', ['liberado', 'medicao']]];
+  const LACO = {
+    headops: [['capacidade', 'Capacidade'], ['alocacao', 'Alocação'], ['regua', 'Limite de carga'], ['impedimentos', 'Impedimentos'], ['revisao', 'Revisão parada']],
+    direcao: [['escaladas', 'Escaladas'], ['proposta', 'Proposta e preço'], ['medida', 'Medição'], ['resultado-uso', 'Resultado no uso'], ['autonomia', 'Autonomia']],
+    admin: [['pessoas', 'Pessoas'], ['projetos', 'Projetos'], ['agentes', 'Agentes'], ['modelos', 'Modelos'], ['custo', 'Custo'], ['incidentes', 'Incidentes']]
+  };
+  const SUBS_ADMIN = [
+    { id: 'entrada', e: 'pessoas', ic: 'pessoa', t: 'Entrada' }, { id: 'saida', e: 'pessoas', ic: 'saida', t: 'Saída' },
+    { id: 'ativacao', e: 'projetos', ic: 'liberado', t: 'Ativação' },
+    { id: 'sombra', e: 'agentes', ic: 'agente', t: 'Sombra' }, { id: 'promocao', e: 'agentes', ic: 'homologado', t: 'Promoção' },
+    { id: 'matriz', e: 'modelos', ic: 'sprint', t: 'Revisão semanal' },
+    { id: 'custo-proj', e: 'custo', ic: 'medido', t: 'Por projeto' },
+    { id: 'emergencia', e: 'incidentes', ic: 'cadeado', t: 'Acesso de emergência' }, { id: 'incidente', e: 'incidentes', ic: 'alerta', t: 'Incidente' }
+  ];
+  function modelo(papel) {
+    const alt = ALTITUDE[papel] || 'projeto';
+    let etapas, subs;
+    if (alt === 'projeto') {
+      etapas = ETAPAS;
+      /* Uma decisão do papel numa subetapa que não é dele também a traz para o trilho dele: nada com a pessoa fica fora. */
+      subs = ESTACOES.filter((x) => x.papeis.includes(papel) || S.pendencias.some((q) => q.estado !== 'feita' && q.papel === papel && estDe(q) === x.id));
+    } else if (alt === 'cliente') {
+      etapas = FASES_CLI.map(([id, nm]) => [id, nm]);
+      subs = FASES_CLI.flatMap(([f, , ids]) => ids.map((i) => { const x = ESTACOES.find((q) => q.id === i); return { ...x, e: f, t: x.cli }; }));
+    } else if (alt === 'carteira') {
+      etapas = LACO[papel];
+      subs = etapas.flatMap(([et]) => S.carteira.map((pj) => ({ id: et + '-' + pj.id, e: et, ic: 'projeto', t: pj.nome, proj: pj.id })));
+    } else { etapas = LACO.admin; subs = SUBS_ADMIN; }
+    return { alt, etapas, subs, sub: (id) => subs.find((x) => x.id === id) };
+  }
+  /* Onde a pendência cai no trilho do papel dela. */
+  const NO_LACO = { headops: { 'excecao-limite': 'regua', 'impedimento-escalado': 'impedimentos', impedimento: 'impedimentos', 'revisar-pr': 'revisao' }, direcao: { 'aceitar-medicao': 'medida', 'fechar-medicao': 'medida' } };
+  const NO_ADMIN = { 'ativar-agente': 'promocao', 'revisao-modelos': 'matriz', 'relatorio-custo': 'custo-proj' };
+  function estNo(papel, x) {
+    const alt = ALTITUDE[papel] || 'projeto';
+    if (alt === 'plataforma') return NO_ADMIN[x.tipo] || null;
+    if (alt === 'carteira') {
+      const pj = S.carteira.find((c) => c.id === x.projeto || c.nome === x.projeto);
+      return ((NO_LACO[papel] || {})[x.tipo] || (papel === 'direcao' ? 'escaladas' : 'impedimentos')) + '-' + (pj ? pj.id : S.projeto.id);
+    }
+    return estDe(x);
+  }
+  /* Com quem a subetapa é passagem: os outros papéis que a têm no trilho, e o cliente quando ela tem nome para ele. */
+  function passagemCom(x, papel) {
+    const base = ESTACOES.find((q) => q.id === x.id);
+    if (!base) return [];
+    return [...base.papeis.filter((p) => p !== papel).map((p) => papelDe(p).nome), ...(base.cli && papel !== 'cliente' ? ['Cliente'] : [])];
+  }
   /* Ícones de traço fino, desenhados aqui, sem biblioteca. */
   const IC = {
     pedido: '<path d="M5 5h14v14H5z"/><path d="M9 9h6M9 13h4"/>', conversa: '<path d="M5 6h14v9H9l-4 3z"/>', alvo: '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/>',
@@ -1122,6 +1179,9 @@
     previa: '<rect x="4" y="5" width="16" height="12" rx="2"/><path d="M10 9l4 2-4 2z"/>', homologado: '<path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"/><path d="M9 12l2 2 4-4"/>',
     producao: '<path d="M12 4v10M8 10l4 4 4-4M5 19h14"/>', liberado: '<circle cx="12" cy="12" r="8"/><path d="M8 12h8M13 9l3 3-3 3"/>',
     medido: '<path d="M5 19V9M10 19V5M15 19v-7M20 19v-4"/>', uso: '<path d="M4 16l5-5 4 3 7-7"/>',
+    projeto: '<rect x="4" y="6" width="16" height="12" rx="2"/><path d="M4 10h16"/>', pessoa: '<circle cx="12" cy="8" r="3.5"/><path d="M5 20c1-4 4-6 7-6s6 2 7 6"/>',
+    saida: '<path d="M10 5H5v14h5M14 8l4 4-4 4M18 12H9"/>', agente: '<rect x="5" y="7" width="14" height="11" rx="3"/><path d="M12 7V4M9 12h.01M15 12h.01"/>',
+    alerta: '<path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17h.01"/>',
     ok: '<path d="M5 12l4 4 10-10"/>', cadeado: '<rect x="6" y="11" width="12" height="9" rx="2"/><path d="M9 11V8a3 3 0 0 1 6 0v3"/>'
   };
   const icone = (n) => `<svg viewBox="0 0 24 24" aria-hidden="true">${IC[n]}</svg>`;
@@ -1131,6 +1191,7 @@
   /* O estado de cada subetapa sai do estado do mock: feito, atual (onde o projeto está), parado (esperando decisão de fora)
      ou vazio (ainda sem registro). Sem estado, é o que vem depois. */
   function estadoEst(id) {
+    if (!ESTACOES.some((q) => q.id === id)) return S.pendencias.some((q) => q.estado !== 'feita' && q.bloco === 'com' && estNo(q.papel, q) === id) ? 'atual' : '';
     const base = estadoBase(id);
     /* Decisão aberta de qualquer pessoa numa etapa feita ou próxima a faz atual. */
     if (['feito', '', 'vazio'].includes(base) && S.pendencias.some((x) => x.estado !== 'feita' && x.bloco === 'com' && estDe(x) === id)) return 'atual';
@@ -1156,6 +1217,8 @@
     }
   }
   const NOME_ESTADO = { feito: 'feito', atual: 'atual', parado: 'Bloqueado', vazio: 'não registrado', '': 'próximo' };
+  /* Na carteira e na plataforma não há o que vem depois: sem decisão aberta, o ponto está em dia (D77). */
+  const nomeEstado = (st, M) => (st === '' && M && ['carteira', 'plataforma'].includes(M.alt) ? 'em dia' : NOME_ESTADO[st]);
   /* Em que subetapa cada pendência acontece. A da plataforma (Admin) fica fora do trilho do projeto. */
   function estDe(x) {
     const PORTIPO = {
@@ -1178,8 +1241,8 @@
   const VAZIO_TRILHO = { pe: 'Nada escalou para você', headops: 'Nenhuma decisão escalada para você', direcao: 'Nada escalou para você', admin: 'Nada da plataforma com você' };
   /* O estado do estágio sai das subetapas que o papel lê: Bloqueado com alguma bloqueada, atual com alguma atual, feito quando
      nada ali está em andamento nem por vir (o que falta registrar aparece na subetapa), próximo no resto. */
-  function estadoEtapa(et, cli) {
-    const sts = ESTACOES.filter((x) => x.e === et && (!cli || x.cli)).map((x) => estadoEst(x.id));
+  function estadoEtapa(et, M) {
+    const sts = M.subs.filter((x) => x.e === et).map((x) => estadoEst(x.id));
     /* Bloqueado vem primeiro: com o estágio fechado, é o nó dele que avisa. */
     if (sts.includes('parado')) return 'parado';
     if (sts.includes('atual')) return 'atual';
@@ -1189,60 +1252,65 @@
      ramo curvo; 2, o foco: a subetapa escolhida leva o estágio para a esquerda, com ela destacada abaixo, e o painel abre ao lado.
      O estágio aberto é o do endereço ou o da subetapa em foco; sem nenhum dos dois, só a linha. */
   function etapaAberta(r) {
-    if (ETAPAS.some((x) => x[0] === r.etapa)) return r.etapa;
-    const daEst = ESTACOES.find((x) => x.id === r.est);
+    const M = modelo(r.papel);
+    if (M.etapas.some((x) => x[0] === r.etapa)) return r.etapa;
+    const daEst = M.sub(r.est);
     return daEst ? daEst.e : null;
   }
-  const FOCO_SEM_ESTACAO = { dia: 'Seu dia', plataforma: 'Fora do projeto' };
+  const FOCO_SEM_ESTACAO = { dia: 'Seu dia', plataforma: 'Fora do trilho' };
   function trilho(r) {
-    const cli = r.papel === 'cliente';
+    const M = modelo(r.papel);
     const com = abertas(r.p, r.papel, 'com');
     const prep = abertas(r.p, r.papel, 'prep');
-    const noTrilho = com.filter((x) => estDe(x));
-    const fora = com.filter((x) => !estDe(x));
+    const no = (x) => estNo(r.papel, x);
+    const noTrilho = com.filter((x) => no(x) && M.sub(no(x)));
+    const fora = com.filter((x) => !(no(x) && M.sub(no(x))));
     const primeira = noTrilho[0] || fora[0];
     const pilula = primeira
-      ? `<button type="button" class="pilula" data-est="${esc(estDe(primeira) || 'plataforma')}">Com você: ${esc(primeira.titulo)}${com.length > 1 ? ' · e mais ' + (com.length - 1) : ''}</button>`
+      ? `<button type="button" class="pilula" data-est="${esc((no(primeira) && M.sub(no(primeira)) ? no(primeira) : '') || 'plataforma')}">Com você: ${esc(primeira.titulo)}${com.length > 1 ? ' · e mais ' + (com.length - 1) : ''}</button>`
       : `<span class="pilula calma">${esc(VAZIO_TRILHO[r.papel] || 'Nada com você agora')}</span>`;
     const aberta = etapaAberta(r);
-    const focoEst = ESTACOES.find((x) => x.id === r.est);
+    const focoEst = M.sub(r.est);
     const emFoco = !!(focoEst || FOCO_SEM_ESTACAO[r.est]);
-    const estacoes = (et) => ESTACOES.filter((x) => x.e === et).map((x) => {
-      const minha = x.papeis.includes(r.papel);
-      const n = noTrilho.filter((p) => estDe(p) === x.id).length;
-      const np = prep.filter((p) => estDe(p) === x.id).length;
-      const interna = cli && !x.cli;
-      const st = estadoEst(x.id);
-      const rot = interna ? '' : (cli ? x.cli : x.t);
-      const sinal = (st === 'feito' ? `<span class="sinal">${icone('ok')}</span>` : st === 'parado' ? `<span class="sinal bloq">${icone('cadeado')}</span>` : '') + (n ? '<span class="sinal-vez"></span>' : '');
-      /* A contagem e o preparado ficam para o leitor de tela; na tela, o ponto de "com você" basta (D74). */
-      return `<button type="button" class="est${minha ? ' minha' : ''}${n ? ' com-voce' : ''}${interna ? ' interna' : ''}" data-est="${x.id}" data-estado="${st}" title="${esc((rot || 'Trabalho da equipe') + ': ' + NOME_ESTADO[st])}"${interna ? ' aria-label="Trabalho da equipe"' : ''}><span class="ponto">${interna ? '' : icone(x.ic)}${interna ? '' : sinal}</span>${rot ? `<b>${esc(rot)}</b>` : ''}${n ? `<span class="marca-vez">${n === 1 ? '1 decisão' : n + ' decisões'}</span>` : np ? '<span class="marca-prep">preparado</span>' : ''}</button>`;
-    }).join('');
+    /* Estágio sem subetapa do papel: o trabalho ali é de outros papéis, e o trilho diz isso em vez de mostrar o que não é dele. */
+    const estacoes = (et) => {
+      const daqui = M.subs.filter((x) => x.e === et);
+      if (!daqui.length) return '<p class="passa">Passa por outros papéis</p>';
+      return daqui.map((x) => {
+        const n = noTrilho.filter((p) => no(p) === x.id).length;
+        const np = prep.filter((p) => no(p) === x.id).length;
+        const st = estadoEst(x.id);
+        const sinal = (st === 'feito' ? `<span class="sinal">${icone('ok')}</span>` : st === 'parado' ? `<span class="sinal bloq">${icone('cadeado')}</span>` : '') + (n ? '<span class="sinal-vez"></span>' : '');
+        /* A contagem e o preparado ficam para o leitor de tela; na tela, o ponto de "com você" basta (D74). */
+        return `<button type="button" class="est minha${n ? ' com-voce' : ''}" data-est="${x.id}" data-estado="${st}" title="${esc(x.t + ': ' + nomeEstado(st, M))}"><span class="ponto">${icone(x.ic)}${sinal}</span><b>${esc(x.t)}</b>${n ? `<span class="marca-vez">${n === 1 ? '1 decisão' : n + ' decisões'}</span>` : np ? '<span class="marca-prep">preparado</span>' : ''}</button>`;
+      }).join('');
+    };
     /* O traço une a primeira à última bolinha; o trecho já percorrido vai mais escuro, até o estágio mais adiantado em andamento. */
+    const n = M.etapas.length;
     let ate = 0;
-    ETAPAS.forEach(([id], i) => { if (['feito', 'atual', 'parado'].includes(estadoEtapa(id, cli))) ate = i; });
-    const etapas = ETAPAS.map(([id, nm]) => {
-      const st = estadoEtapa(id, cli);
-      const minha = ESTACOES.some((x) => x.e === id && x.papeis.includes(r.papel));
-      const vez = noTrilho.some((p) => ESTACOES.find((x) => x.id === estDe(p)).e === id);
-      return `<li><button type="button" class="etapa${aberta === id ? ' aberta' : ''}${minha ? '' : ' apagada'}" data-etapa="${id}" data-estado="${st}" aria-expanded="${aberta === id && !emFoco}" aria-controls="cacho-${id}"><span class="no">${st === 'parado' ? icone('cadeado') : ''}</span><span class="rot">${nm}${vez ? '<i class="vez" title="Uma decisão com você"></i>' : ''}</span><span class="estado-etapa">${NOME_ESTADO[st]}</span></button></li>`;
+    M.etapas.forEach(([id], i) => { if (['feito', 'atual', 'parado'].includes(estadoEtapa(id, M))) ate = i; });
+    const etapas = M.etapas.map(([id, nm]) => {
+      const st = estadoEtapa(id, M);
+      const minha = M.subs.some((x) => x.e === id);
+      const vez = noTrilho.some((p) => M.sub(no(p)).e === id);
+      return `<li><button type="button" class="etapa${aberta === id ? ' aberta' : ''}${minha ? '' : ' apagada'}" data-etapa="${id}" data-estado="${st}" aria-expanded="${aberta === id && !emFoco}" aria-controls="cacho-${id}"><span class="no">${st === 'parado' ? icone('cadeado') : ''}</span><span class="rot">${nm}${vez ? '<i class="vez" title="Uma decisão com você"></i>' : ''}</span><span class="estado-etapa">${nomeEstado(st, M)}</span></button></li>`;
     }).join('');
-    const cachos = ETAPAS.map(([id]) => `<div class="estacoes" id="cacho-${id}" data-etapa="${id}"${aberta === id && !emFoco ? '' : ' hidden'}>${estacoes(id)}</div>`).join('');
-    /* A camada de foco: o estágio à esquerda (ou o seu dia, ou o que é de fora do projeto) e a subetapa destacada abaixo dele. */
+    const cachos = M.etapas.map(([id]) => `<div class="estacoes" id="cacho-${id}" data-etapa="${id}"${aberta === id && !emFoco ? '' : ' hidden'}>${estacoes(id)}</div>`).join('');
+    /* A camada de foco: o estágio à esquerda (ou o seu dia, ou o que é de fora do trilho) e a subetapa destacada abaixo dele. */
     let foco = '';
     if (emFoco) {
-      const et = focoEst ? ETAPAS.find((e) => e[0] === focoEst.e) : null;
-      const stE = et ? estadoEtapa(et[0], cli) : '';
-      const nmEst = focoEst ? (cli ? focoEst.cli || 'Trabalho da equipe' : focoEst.t) : '';
-      const vezAqui = focoEst && noTrilho.some((p) => estDe(p) === focoEst.id);
+      const et = focoEst ? M.etapas.find((e) => e[0] === focoEst.e) : null;
+      const stE = et ? estadoEtapa(et[0], M) : '';
+      const vezAqui = focoEst && noTrilho.some((p) => no(p) === focoEst.id);
       foco = `<div class="foco" data-foco="${esc(r.est)}">
         <button type="button" class="foco-estagio${et ? '' : ' sem-estagio'}" data-voltar="${et ? et[0] : ''}" data-estado="${stE}" title="Voltar à linha inteira" aria-label="${esc((et ? et[1] : FOCO_SEM_ESTACAO[r.est]) + ': voltar à linha inteira')}"><span class="no">${stE === 'parado' ? icone('cadeado') : ''}</span><span class="rot">${esc(et ? et[1] : FOCO_SEM_ESTACAO[r.est])}</span></button>
-        ${focoEst ? `<div class="foco-item"><span class="circ">${focoEst.cli || !cli ? icone(focoEst.ic) : ''}${vezAqui ? '<span class="sinal-vez"></span>' : ''}</span><span class="nome">${esc(nmEst)}</span></div>` : ''}
+        ${focoEst ? `<div class="foco-item"><span class="circ">${icone(focoEst.ic)}${vezAqui ? '<span class="sinal-vez"></span>' : ''}</span><span class="nome">${esc(focoEst.t)}</span></div>` : ''}
         <svg class="ramo ramo-foco" aria-hidden="true"><path/></svg></div>`;
     }
-    return `<div class="trilho-topo"><button type="button" class="seu-dia" data-est="dia" title="Abrir o seu dia">Seu dia</button>${pilula}${fora.length ? `<span class="fora">${fora.map((x) => `<button type="button" class="linha" data-est="plataforma"><span class="k">Fora do projeto</span> <span class="t">${esc(x.titulo)}</span></button>`).join('')}</span>` : ''}</div>
-      <h1 class="so-leitor">Trilho do ${esc(S.projeto.nome || 'projeto')}</h1>
-      <div class="trilho${emFoco ? ' em-foco' : ''}" id="trilho" data-camada="${emFoco ? 2 : aberta ? 1 : 0}" style="--ate:${ate * 20}%"><ol class="linha-etapas"${emFoco ? ' inert' : ''}>${etapas}</ol><svg class="ramo ramo-cacho" aria-hidden="true"><path/></svg>${cachos}${foco}</div>`;
+    const titulo = { carteira: 'Trilho da carteira', plataforma: 'Trilho da plataforma' }[M.alt] || 'Trilho do ' + (S.projeto.nome || 'projeto');
+    return `<div class="trilho-topo"><button type="button" class="seu-dia" data-est="dia" title="Abrir o seu dia">Seu dia</button>${pilula}${fora.length ? `<span class="fora">${fora.map((x) => `<button type="button" class="linha" data-est="plataforma"><span class="k">Fora do trilho</span> <span class="t">${esc(x.titulo)}</span></button>`).join('')}</span>` : ''}</div>
+      <h1 class="so-leitor">${esc(titulo)}</h1>
+      <div class="trilho${emFoco ? ' em-foco' : ''}" id="trilho" data-altitude="${M.alt}" data-camada="${emFoco ? 2 : aberta ? 1 : 0}" style="--n:${n};--ate:${ate * 100 / n}%"><ol class="linha-etapas"${emFoco ? ' inert' : ''}>${etapas}</ol><svg class="ramo ramo-cacho" aria-hidden="true"><path/></svg>${cachos}${foco}</div>`;
   }
   /* Ramo curvo: desce do ponto (x0, y0), faz uma curva larga e chega ao ponto (x1, y1). */
   function curva(x0, y0, x1, y1) {
@@ -1266,7 +1334,8 @@
       const c = centro(cacho), pontos = [...cacho.querySelectorAll('.est .ponto')].map(centro);
       /* Numa linha só, o ramo chega ao meio das subetapas; quando elas quebram de linha (tela estreita), ao ponto mais perto do estágio. */
       const umaLinha = pontos.every((q) => Math.abs(q.y - pontos[0].y) < 2);
-      const alvo = umaLinha ? (pontos[0].x + pontos[pontos.length - 1].x) / 2 : pontos.reduce((m, q) => (Math.abs(q.x - n.x) < Math.abs(m.x - n.x) ? q : m)).x;
+      /* Sem subetapa do papel no estágio (D77), o ramo chega ao aviso de que ali passa por outros papéis. */
+      const alvo = !pontos.length ? c.x : umaLinha ? (pontos[0].x + pontos[pontos.length - 1].x) / 2 : pontos.reduce((m, q) => (Math.abs(q.x - n.x) < Math.abs(m.x - n.x) ? q : m)).x;
       p.setAttribute('d', curva(n.x, n.b + 34, alvo, c.y - 4));
     } else if (p) p.setAttribute('d', '');
     const pf = T.querySelector('.ramo-foco path'), fe = T.querySelector('.foco-estagio .no'), fi = T.querySelector('.foco-item .circ');
@@ -1396,26 +1465,73 @@
       homolog: de((x) => x.tipo === 'task' && ['aguardando-homologacao', 'homologado'].includes(x.estado))
     })[id] || [];
   }
+  /* O que a subetapa da carteira ou da plataforma mostra sem decisão ali: só números da carteira e nunca conteúdo de item
+     (ADR-049, ADR-017); o que ainda não está no mock é dito, sem número inventado. */
+  function contextoAlto(x, r) {
+    const pj = x.proj && S.carteira.find((c) => c.id === x.proj);
+    const L = [];
+    let extra = '';
+    if (pj) {
+      const doMock = pj.id === S.projeto.id;
+      const TXT = {
+        alocacao: 'A alocação entre projetos entra com a tela Capacidade; ainda em preparação.',
+        regua: doMock ? 'Nenhuma exceção ao limite de ' + S.projeto.limite + ' PF por pessoa neste projeto.' : 'Nenhuma exceção ao limite de carga neste projeto.',
+        impedimentos: 'Nenhum impedimento escalou deste projeto.',
+        revisao: 'Nenhuma revisão parada escalou deste projeto.',
+        escaladas: 'Nada escalou deste projeto.',
+        proposta: 'Proposta e preço entram com o fluxo comercial, que é opcional; ainda em preparação.',
+        'resultado-uso': 'Sem dado: entra quando uma função for liberada a quem usa.',
+        autonomia: 'O percentual de passos sem intervenção humana ainda não é medido.'
+      };
+      if (x.e === 'capacidade') {
+        L.push('Saúde: ' + (pj.saude || pj.nota || 'sem relato ainda'), 'Sprint: ' + (pj.sprint || 'sem sprint aberta'));
+        if (doMock) extra = cargaNoPainel(r);
+        else L.push('Carga planejada: ' + (pj.planejado != null ? pj.planejado + ' de ' + pj.capacidade + ' PF' : 'sem dado'));
+      } else if (x.e === 'medida') L.push('Medição: ' + (doMock ? NOME_ESTADO[estadoEst('medicao')] : 'sem medição aberta'));
+      else L.push(TXT[x.e]);
+    } else {
+      const ADM = {
+        entrada: ['A entrada de pessoas e os papéis de cada uma.', 'pessoas', 'Ir para Pessoas'],
+        saida: ['A saída de uma pessoa revoga o acesso e religa as rotinas dela.', 'pessoas', 'Ir para Pessoas'],
+        ativacao: ['A ativação de um projeto é decisão do Admin; ainda em preparação.'],
+        sombra: ['Cada versão nova de agente roda em sombra antes de valer.', 'agentes', 'Ir para Agentes'],
+        promocao: ['Depois da sombra, a promoção do agente é decisão do Admin.', 'agentes', 'Ir para Agentes'],
+        matriz: ['A revisão semanal dos modelos.', 'agentes', 'Ir para Agentes'],
+        'custo-proj': ['O custo dos agentes por projeto e por bloco de trabalho, só com dados de uso.', 'agentes', 'Ir para Agentes'],
+        emergencia: ['O acesso de emergência pede duas pessoas; ainda em preparação.'],
+        incidente: ['Encerrar um incidente pede duas pessoas; ainda em preparação.']
+      }[x.id] || [''];
+      L.push(ADM[0]);
+      if (ADM[1] && papelDe(r.papel).telas.includes(ADM[1])) extra = `<button type="button" class="btn" data-ir-tela="${ADM[1]}">${esc(ADM[2])}</button>`;
+    }
+    return `<ul class="contexto-est">${L.filter(Boolean).map((t) => `<li>${esc(t)}</li>`).join('')}</ul>${extra}`;
+  }
   function painelEstacao(r) {
-    const cli = r.papel === 'cliente';
+    const M = modelo(r.papel);
+    const cli = M.alt === 'cliente';
+    const alto = ['carteira', 'plataforma'].includes(M.alt);
     let topo, corpo, topoLinha = '';
     if (r.est === 'dia') {
       topo = 'Seu dia';
       corpo = papelDe(r.papel).carteira ? carteira(r) : inicio(r);
     } else {
-      const com = abertas(r.p, r.papel, 'com').filter((x) => (r.est === 'plataforma' ? !estDe(x) : estDe(x) === r.est));
-      const prep = abertas(r.p, r.papel, 'prep').filter((x) => (r.est === 'plataforma' ? !estDe(x) : estDe(x) === r.est));
-      const x = ESTACOES.find((e) => e.id === r.est);
-      topo = r.est === 'plataforma' ? 'Fora do projeto' : x ? (cli ? x.cli || 'Trabalho da equipe' : x.t) : '';
-      const etapa = x ? ETAPAS.find((e) => e[0] === x.e)[1] + ' · ' + NOME_ESTADO[estadoEst(x.id)] : '';
-      topoLinha = etapa;
+      const aqui = (x) => { const k = estNo(r.papel, x); return r.est === 'plataforma' ? !(k && M.sub(k)) : k === r.est; };
+      const com = abertas(r.p, r.papel, 'com').filter(aqui);
+      const prep = abertas(r.p, r.papel, 'prep').filter(aqui);
+      const x = M.sub(r.est);
+      topo = r.est === 'plataforma' ? 'Fora do trilho' : x ? x.t : '';
+      const et = x && M.etapas.find((e) => e[0] === x.e);
+      topoLinha = et ? et[1] + ' · ' + nomeEstado(estadoEst(x.id), M) : '';
+      /* Ponto de passagem: a subetapa diz com quem a pessoa se encontra ali (D77). */
+      const outros = x && M.alt === 'projeto' ? passagemCom(x, r.papel) : [];
       const imp = S.itens['IMP-01'];
-      if (x && x.id === 'decisao' && estadoEst('decisao') === 'parado' && imp && !['headops', 'direcao', 'admin', 'cliente'].includes(r.papel)) topoLinha += ': ' + imp.bloqueadoPor;
-      /* A carga da sprint fica no painel da Sprint (D74), com ou sem decisão ali. */
-      const carga = x && x.id === 'sprint' && !['cliente', 'admin'].includes(r.papel) ? cargaNoPainel(r) : '';
-      corpo = `${carga}${com.map((pend) => `<div class="decisao-painel" data-decisao="${esc(pend.id)}">${cartaoDecisao(r, pend)}${pend.tipo === 'conferir-previa' ? '' : (() => { const t = trilhaDoItem(pend.item, cli); return t ? `<h3>Trilha do item</h3>${t}` : ''; })()}${['headops', 'direcao', 'admin'].includes(r.papel) ? '' : ligacoes(pend.item, cli)}</div>`).join('')}
+      if (x && x.id === 'decisao' && estadoEst('decisao') === 'parado' && imp && M.alt === 'projeto') topoLinha += ': ' + imp.bloqueadoPor;
+      if (outros.length) topoLinha += ' · com ' + outros.join(', ');
+      /* A carga da sprint fica no painel da Sprint (D74), com ou sem decisão ali; para a carteira, na Capacidade do projeto. */
+      const carga = x && x.id === 'sprint' && M.alt === 'projeto' ? cargaNoPainel(r) : '';
+      corpo = `${carga}${com.map((pend) => `<div class="decisao-painel" data-decisao="${esc(pend.id)}">${cartaoDecisao(r, pend)}${pend.tipo === 'conferir-previa' ? '' : (() => { const t = trilhaDoItem(pend.item, cli); return t ? `<h3>Trilha do item</h3>${t}` : ''; })()}${alto ? '' : ligacoes(pend.item, cli)}</div>`).join('')}
         ${prep.map(itemPrep).join('')}
-        ${!com.length && !prep.length ? `<p class="vazio">${x && !x.papeis.includes(r.papel) ? 'Esta etapa é de outro papel.' : 'Nada com você nesta etapa agora.'}</p>${x && x.papeis.includes(r.papel) && !(cli && !x.cli) ? contextoEst(x.id, r) + (['headops', 'direcao', 'admin'].includes(r.papel) ? '' : itensDaEtapa(x.id).slice(0, 3).map((i) => ligacoes(i, cli)).join('')) : ''}` : ''}`;
+        ${!com.length && !prep.length ? `<p class="vazio">Nada com você nesta etapa agora.</p>${x ? (alto ? contextoAlto(x, r) : contextoEst(x.id, r) + itensDaEtapa(x.id).slice(0, 3).map((i) => ligacoes(i, cli)).join('')) : ''}` : ''}`;
     }
     return `<aside id="detalhe" class="painel-trilho" data-est="${esc(r.est)}" aria-label="${esc(topo)}">
       <div class="det-topo"><span class="m" data-estado-est>${esc(topoLinha || topo)}</span><button type="button" class="btn" id="fechar-detalhe">Fechar</button></div>
@@ -1514,7 +1630,7 @@
     if (el.matches('[data-abrir]')) { ir({ p: r.p, papel: r.papel, tela: r.tela, vista: r.vista, etapa: r.etapa, est: r.est, item: el.dataset.abrir }); return; }
     if (el.matches('.etapa[data-etapa]')) { const fechar = r.etapa === el.dataset.etapa && !r.est; focoDepois = `.etapa[data-etapa="${el.dataset.etapa}"]`; transicao = fechar ? null : { tipo: 'abrir' }; ir({ p: r.p, papel: r.papel, tela: 'trilho', etapa: fechar ? undefined : el.dataset.etapa }); return; }
     if (el.matches('.foco-estagio')) { const no = el.querySelector('.no'); transicao = { tipo: 'voltar', de: no.getBoundingClientRect() }; focoDepois = volta(r); ir({ p: r.p, papel: r.papel, tela: 'trilho', etapa: el.dataset.voltar || undefined }); return; }
-    if (el.matches('[data-est]')) { const x = ESTACOES.find((s) => s.id === el.dataset.est); const no = x && document.querySelector(`.etapa[data-etapa="${x.e}"] .no`); if (no && r.tela === 'trilho' && !r.est) transicao = { tipo: 'focar', de: no.getBoundingClientRect() }; if (r.tela === 'trilho') focoDepois = '.foco-estagio'; ir({ p: r.p, papel: r.papel, tela: 'trilho', etapa: x ? x.e : r.etapa, est: el.dataset.est }); return; }
+    if (el.matches('[data-est]')) { const x = modelo(r.papel).sub(el.dataset.est); const no = x && document.querySelector(`.etapa[data-etapa="${x.e}"] .no`); if (no && r.tela === 'trilho' && !r.est) transicao = { tipo: 'focar', de: no.getBoundingClientRect() }; if (r.tela === 'trilho') focoDepois = '.foco-estagio'; ir({ p: r.p, papel: r.papel, tela: 'trilho', etapa: x ? x.e : r.etapa, est: el.dataset.est }); return; }
     if (el.matches('[data-tema]')) { aplicarTema(el.dataset.tema); document.querySelectorAll('.tema [data-tema]').forEach((b) => b.setAttribute('aria-pressed', String(b === el))); return; }
     if (el.matches('[data-comentar]')) { ir({ p: r.p, papel: r.papel, tela: r.tela, etapa: r.etapa, est: r.est, vista: 'trecho-' + el.dataset.comentar }); return; }
     if (el.matches('[data-fechar-trecho]')) { ir({ p: r.p, papel: r.papel, tela: r.tela, etapa: r.etapa, est: r.est }); return; }
@@ -1524,7 +1640,7 @@
     if (el.matches('[data-ir-tela]')) { ir({ p: r.p, papel: r.papel, tela: el.dataset.irTela }); return; }
     /* Fechar o item aberto de dentro do painel volta ao painel; fechar o painel volta ao trilho. */
     if (el.id === 'fechar-detalhe' && !r.item && r.tela === 'trilho') { const no = document.querySelector('.foco-estagio .no'); if (no) transicao = { tipo: 'voltar', de: no.getBoundingClientRect() }; focoDepois = volta(r); }
-    if (el.id === 'fechar-detalhe') { ir({ p: r.p, papel: r.papel, tela: r.tela, vista: r.vista, etapa: r.etapa || (ESTACOES.find((s) => s.id === r.est) || {}).e, est: r.item ? r.est : undefined }); return; }
+    if (el.id === 'fechar-detalhe') { ir({ p: r.p, papel: r.papel, tela: r.tela, vista: r.vista, etapa: r.etapa || (modelo(r.papel).sub(r.est) || {}).e, est: r.item ? r.est : undefined }); return; }
     if (el.matches('[data-trocar-papel]')) { const novo = el.dataset.trocarPapel; ir({ p: r.p, papel: novo, tela: r.tela === 'inicio' || papelDe(novo).telas.includes(r.tela) ? r.tela : 'trilho' }); return; }
     if (el.id === 'btn-demo') { document.getElementById('demo').showModal(); return; }
     if (el.id === 'demo-fechar') { document.getElementById('demo').close(); return; }
